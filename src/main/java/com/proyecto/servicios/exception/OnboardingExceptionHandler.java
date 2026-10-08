@@ -14,6 +14,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import com.proyecto.servicios.controller.ClienteController;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -26,7 +27,7 @@ import com.proyecto.servicios.exception.onboarding.RfcDuplicadoException;
 import com.proyecto.servicios.exception.onboarding.CorreoDuplicadoException;
 
 @Slf4j
-@RestControllerAdvice
+@RestControllerAdvice(assignableTypes = ClienteController.class)
 public class OnboardingExceptionHandler {
 
     @ExceptionHandler(OnboardingException.class)
@@ -103,6 +104,12 @@ public class OnboardingExceptionHandler {
         String msg = ex.getMostSpecificCause().getMessage();
         Matcher m = (msg == null) ? null : RESTRICCION.matcher(msg);
         return (m != null && m.find()) ? m.group(1).toLowerCase(Locale.ROOT) : null;
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<GenericResponse> handleGenerico(Exception ex) {
+        log.error("Error interno del servidor no controlado", ex);
+        return construirRespuesta(HttpStatus.INTERNAL_SERVER_ERROR, "Ha ocurrido un error inesperado en el servidor.");
     }
 
     private ResponseEntity<GenericResponse> construirRespuesta(HttpStatus status, String mensaje) {

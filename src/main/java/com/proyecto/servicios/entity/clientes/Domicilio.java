@@ -2,6 +2,7 @@ package com.proyecto.servicios.entity.clientes;
 
 import jakarta.persistence.*;
 import lombok.*;
+import com.proyecto.servicios.enums.Pais;
 
 @Entity
 @Table(name = "domicilios")
@@ -41,6 +42,8 @@ public class Domicilio {
     @Column(name = "estado", nullable = false, length = 50)
     private String estado;
 
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
     @Column(name = "pais", nullable = false, length = 50)
-    private String pais;
+    private Pais pais = Pais.MEXICO;
 }

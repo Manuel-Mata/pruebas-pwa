@@ -5,7 +5,9 @@ import com.proyecto.servicios.entity.clientes.Cuenta;
 import com.proyecto.servicios.entity.clientes.Domicilio;
 import com.proyecto.servicios.entity.clientes.Usuario;
 import com.proyecto.servicios.enums.EstatusCuenta;
+import com.proyecto.servicios.enums.Pais;
 import com.proyecto.servicios.exception.onboarding.*;
+import com.proyecto.servicios.model.ClienteDetalleResponse;
 import com.proyecto.servicios.model.ClienteRegistroRequest;
 import com.proyecto.servicios.model.ClienteRegistroResponse;
 import com.proyecto.servicios.repositorys.clientes.ClienteRepository;
@@ -17,11 +19,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Period;
+import java.time.OffsetDateTime;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -35,9 +40,12 @@ public class ClienteService {
     private final PasswordEncoder passwordEncoder;
     private final Clock clock; // Permite testing de fechas
 
+    @Value("${onboarding.cuenta.saldo-inicial:0.00}")
+    private BigDecimal saldoInicial;
+
     @Transactional
     public ClienteRegistroResponse registrarCliente(ClienteRegistroRequest request) {
-        log.info("Iniciando registro para CURP: {}", request.getCurp());
+        log.info("Iniciando registro de cliente");
 
         // 1. Normalización
         normalizarDatos(request);
@@ -74,13 +82,98 @@ public class ClienteService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public ClienteDetalleResponse obtenerPorId(Long id) {
+        Cliente cliente = clienteRepository.findById(id)
+                .orElseThrow(ClienteNoEncontradoException::new);
+        
+        Domicilio domicilio = domicilioRepository.findByClienteId(id).orElse(null);
+        List<Cuenta> cuentas = cuentaRepository.findByClienteId(id);
+
+        return mapearADetalle(cliente, domicilio, cuentas);
+    }
+
+    @Transactional
+    public void darDeBaja(Long id) {
+        Cliente cliente = clienteRepository.findById(id)
+                .orElseThrow(ClienteNoEncontradoException::new);
+
+        if (!cliente.getActivo()) {
+            throw new ClienteInactivoException();
+        }
+
+        cliente.setActivo(false);
+        cliente.setFechaBaja(OffsetDateTime.now(clock));
+        clienteRepository.save(cliente);
+
+        Usuario usuario = usuarioRepository.findByClienteId(id)
+                .orElseThrow(UsuarioNoEncontradoException::new);
+        usuario.setActivo(false);
+        usuarioRepository.save(usuario);
+
+        List<Cuenta> cuentas = cuentaRepository.findByClienteId(id);
+        for (Cuenta cuenta : cuentas) {
+            cuenta.setEstatus(EstatusCuenta.INACTIVA);
+        }
+        cuentaRepository.saveAll(cuentas);
+    }
+
+    private ClienteDetalleResponse mapearADetalle(Cliente cliente, Domicilio domicilio, List<Cuenta> cuentas) {
+        ClienteDetalleResponse.DomicilioResponse domRes = null;
+        if (domicilio != null) {
+            domRes = ClienteDetalleResponse.DomicilioResponse.builder()
+                    .calle(domicilio.getCalle())
+                    .numeroExterior(domicilio.getNumeroExterior())
+                    .numeroInterior(domicilio.getNumeroInterior())
+                    .colonia(domicilio.getColonia())
+                    .municipio(domicilio.getMunicipio())
+                    .estado(domicilio.getEstado())
+                    .pais(domicilio.getPais())
+                    .cp(domicilio.getCp())
+                    .build();
+        }
+
+        List<ClienteDetalleResponse.CuentaResponse> cuentasRes = cuentas.stream().map(c -> 
+            ClienteDetalleResponse.CuentaResponse.builder()
+                .numeroCuenta(c.getNumeroCuenta())
+                .saldo(c.getSaldo())
+                .estatus(c.getEstatus().name())
+                .build()
+        ).toList();
+
+        return ClienteDetalleResponse.builder()
+                .id(cliente.getId())
+                .nombre(cliente.getNombre())
+                .segundoNombre(cliente.getSegundoNombre())
+                .apellidoPaterno(cliente.getApellidoPaterno())
+                .apellidoMaterno(cliente.getApellidoMaterno())
+                .fechaNacimiento(cliente.getFechaNacimiento())
+                .sexo(cliente.getSexo())
+                .nacionalidad(cliente.getNacionalidad())
+                .estadoCivil(cliente.getEstadoCivil())
+                .telefonoMovil(cliente.getTelefonoMovil())
+                .telefonoAlterno(cliente.getTelefonoAlterno())
+                .curp(cliente.getCurp())
+                .rfc(cliente.getRfc())
+                .correo(cliente.getCorreo())
+                .ocupacion(cliente.getOcupacion())
+                .empresa(cliente.getEmpresa())
+                .ingresoMensual(cliente.getIngresoMensual())
+                .activo(cliente.getActivo())
+                .fechaRegistro(cliente.getFechaRegistro())
+                .fechaBaja(cliente.getFechaBaja())
+                .domicilio(domRes)
+                .cuentas(cuentasRes)
+                .build();
+    }
+
     private void normalizarDatos(ClienteRegistroRequest request) {
         request.setCurp(request.getCurp().trim().toUpperCase());
         request.setRfc(request.getRfc().trim().toUpperCase());
         request.setCorreo(request.getCorreo().trim().toLowerCase());
         
-        if (request.getPais() == null || request.getPais().trim().isEmpty()) {
-            request.setPais("México");
+        if (request.getPais() == null) {
+            request.setPais(Pais.MEXICO);
         }
     }
 
@@ -88,12 +181,7 @@ public class ClienteService {
         // Validar Edad
         int edad = Period.between(request.getFechaNacimiento(), LocalDate.now(clock)).getYears();
         if (edad < 18) {
-            throw new ErrorValidacionException("El cliente debe ser mayor de 18 años.");
-        }
-
-        // Validar Contraseña (Min 8, 1 mayus, 1 minus, 1 num, 1 especial)
-        if (!request.getPassword().matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$")) {
-            throw new ContrasenaInvalidaException();
+            throw new ErrorValidacionException("El cliente debe tener al menos 18 años.");
         }
 
         // Validar Duplicados
@@ -103,7 +191,7 @@ public class ClienteService {
         if (clienteRepository.existsByRfc(request.getRfc())) {
             throw new RfcDuplicadoException();
         }
-        if (usuarioRepository.existsByCorreo(request.getCorreo())) {
+        if (clienteRepository.existsByCorreo(request.getCorreo()) || usuarioRepository.existsByCorreo(request.getCorreo())) {
             throw new CorreoDuplicadoException();
         }
     }
@@ -158,7 +246,7 @@ public class ClienteService {
         Cuenta cuenta = new Cuenta();
         cuenta.setCliente(cliente);
         cuenta.setNumeroCuenta(numCuenta);
-        cuenta.setSaldo(BigDecimal.ZERO);
+        cuenta.setSaldo(saldoInicial);
         cuenta.setEstatus(EstatusCuenta.ACTIVA);
         return cuentaRepository.save(cuenta);
     }

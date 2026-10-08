@@ -9,6 +9,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import com.proyecto.servicios.enums.EstadoCivil;
+import com.proyecto.servicios.enums.Nacionalidad;
+import com.proyecto.servicios.enums.Sexo;
 
 @Entity
 @Table(name = "clientes")
@@ -45,7 +47,7 @@ public class Cliente {
     private Boolean activo = true;
 
     @Column(name = "sexo", nullable = false, length = 1)
-    private String sexo;
+    private Sexo sexo;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_civil", nullable = false, length = 15)
@@ -78,8 +80,9 @@ public class Cliente {
     @Column(name = "apellido_materno", nullable = false, length = 50)
     private String apellidoMaterno;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "nacionalidad", nullable = false, length = 50)
-    private String nacionalidad;
+    private Nacionalidad nacionalidad;
 
     @Column(name = "ocupacion", nullable = false, length = 50)
     private String ocupacion;
