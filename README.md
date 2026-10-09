@@ -92,7 +92,7 @@ erDiagram
 ---
 
 ## 2. Tecnologías Utilizadas
-- **Lenguaje:** Java 17
+- **Lenguaje:** Java 21
 - **Framework:** Spring Boot 3.3.6
 - **Persistencia:** Spring Data JPA / Hibernate
 - **Base de Datos:** PostgreSQL
