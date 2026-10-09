@@ -134,3 +134,7 @@ task dockerUp(type: Exec) {
 dependencyCheck {
     formats = ["JSON", "HTML"]
 }
+
+bootJar {
+    archiveFileName = 'app.jar'
+}

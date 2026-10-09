@@ -11,6 +11,7 @@ import com.proyecto.servicios.security.JwtService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +25,10 @@ public class AuthService {
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    
+    @Value("${auth.max-intentos:3}")
+    private int maxIntentos;
+    
     private String hashFicticio;
 
     @PostConstruct
@@ -48,10 +53,10 @@ public class AuthService {
 
             if (!coincide) {
                 usuario.setIntentosFallidos(usuario.getIntentosFallidos() + 1);
-                if (usuario.getIntentosFallidos() >= 3) {
+                if (usuario.getIntentosFallidos() >= maxIntentos) {
                     usuario.setActivo(false);
                     usuarioRepository.save(usuario);
-                    log.warn("Cuenta bloqueada por 3 intentos fallidos. usuarioId={}", usuario.getId());
+                    log.warn("Cuenta bloqueada por superar {} intentos fallidos. usuarioId={}", maxIntentos, usuario.getId());
                     throw new CuentaBloqueadaException();
                 }
                 usuarioRepository.save(usuario);
