@@ -9,8 +9,7 @@ public class PasswordSeguraValidator implements ConstraintValidator<PasswordSegu
     
     private static final Pattern PATTERN = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,72}$");
 
-    @Override
-    public boolean isValid(String value, ConstraintValidatorContext context) {
+    public static boolean esValida(String value) {
         if (value == null) {
             return false;
         }
@@ -18,5 +17,10 @@ public class PasswordSeguraValidator implements ConstraintValidator<PasswordSegu
             return false;
         }
         return PATTERN.matcher(value).matches();
+    }
+
+    @Override
+    public boolean isValid(String value, ConstraintValidatorContext context) {
+        return esValida(value);
     }
 }

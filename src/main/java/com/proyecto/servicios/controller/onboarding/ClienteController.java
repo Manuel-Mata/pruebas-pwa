@@ -1,4 +1,4 @@
-package com.proyecto.servicios.controller;
+package com.proyecto.servicios.controller.onboarding;
 
 import com.proyecto.servicios.model.ClienteRegistroRequest;
 import com.proyecto.servicios.model.ClienteRegistroResponse;

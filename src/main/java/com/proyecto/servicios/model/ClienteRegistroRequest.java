@@ -111,12 +111,10 @@ public class ClienteRegistroRequest {
     @Pattern(regexp = Patrones.TEXTO_LIBRE, message = "La colonia contiene caracteres no permitidos")
     private String colonia;
 
-    @NotBlank(message = "El municipio es obligatorio")
     @Size(max = 50, message = "El municipio debe tener máximo 50 caracteres")
     @Pattern(regexp = Patrones.TEXTO_LIBRE, message = "El municipio contiene caracteres no permitidos")
     private String municipio;
 
-    @NotBlank(message = "El estado es obligatorio")
     @Size(max = 50, message = "El estado debe tener máximo 50 caracteres")
     @Pattern(regexp = Patrones.TEXTO_LIBRE, message = "El estado contiene caracteres no permitidos")
     private String estado;

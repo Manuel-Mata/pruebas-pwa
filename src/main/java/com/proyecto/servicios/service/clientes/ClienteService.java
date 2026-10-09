@@ -15,9 +15,12 @@ import com.proyecto.servicios.repositorys.clientes.CuentaRepository;
 import com.proyecto.servicios.repositorys.clientes.DomicilioRepository;
 import com.proyecto.servicios.repositorys.clientes.UsuarioRepository;
 import com.proyecto.servicios.util.PasswordSeguraValidator;
+import com.proyecto.servicios.util.TextoUtil;
+import com.proyecto.servicios.service.catalogos.CodigoPostalService;
+import com.proyecto.servicios.model.externo.CodigoPostalResponse;
+import com.proyecto.servicios.exception.catalogos.CodigoPostalNoEncontradoException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,13 +41,13 @@ public class ClienteService {
     private final DomicilioRepository domicilioRepository;
     private final UsuarioRepository usuarioRepository;
     private final CuentaRepository cuentaRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final ClientePersistenciaService persistenciaService;
+    private final CodigoPostalService codigoPostalService;
     private final Clock clock; // Permite testing de fechas
 
-    @Value("${onboarding.cuenta.saldo-inicial:0.00}")
-    private BigDecimal saldoInicial;
+    @Value("${postali.validacion-obligatoria:true}")
+    private boolean validacionPostalObligatoria;
 
-    @Transactional
     public ClienteRegistroResponse registrarCliente(ClienteRegistroRequest request) {
         log.info("Iniciando registro de cliente");
 
@@ -54,34 +57,39 @@ public class ClienteService {
         // 2. Validaciones de Negocio
         validarNegocio(request);
 
-        // 3. Crear Cliente
-        Cliente cliente = guardarCliente(request);
+        // 3. Validar Código Postal (Postali)
+        validarCodigoPostal(request);
 
-        // 4. Crear Domicilio
-        guardarDomicilio(request, cliente);
-
-        // 5. Crear Usuario
-        guardarUsuario(request, cliente);
-
-        // 6. Crear Cuenta
-        Cuenta cuenta = guardarCuenta(request, cliente);
-
-        // 7. Retornar Respuesta
-        String nombreCompleto = String.join(" ", 
-                request.getNombre(), 
-                request.getSegundoNombre() == null ? "" : request.getSegundoNombre(),
-                request.getApellidoPaterno(), 
-                request.getApellidoMaterno()
-        ).replaceAll(" +", " ").trim();
-
-        return ClienteRegistroResponse.builder()
-                .clienteId(cliente.getId())
-                .nombreCompleto(nombreCompleto)
-                .numeroCuenta(cuenta.getNumeroCuenta())
-                .correo(request.getCorreo())
-                .mensaje("Cliente registrado exitosamente.")
-                .build();
+        // 4. Persistir todo en una sola transacción
+        return persistenciaService.guardarTodo(request);
     }
+
+    private void validarCodigoPostal(ClienteRegistroRequest request) {
+        if (!validacionPostalObligatoria) {
+            if (esVacio(request.getEstado()) || esVacio(request.getMunicipio())) {
+                throw new ErrorValidacionException(
+                    "Estado y municipio son obligatorios cuando la validación postal está desactivada.");
+            }
+            return;
+        }
+        CodigoPostalResponse cp;
+        try {
+            cp = codigoPostalService.consultar(request.getCp());
+        } catch (CodigoPostalNoEncontradoException e) {
+            throw new ErrorValidacionException("El código postal no existe en el catálogo.");
+        }
+        String buscada = TextoUtil.normalizar(request.getColonia());
+        boolean coincide = cp.getColonias().stream()
+                .map(TextoUtil::normalizar)
+                .anyMatch(buscada::equals);
+        if (!coincide) {
+            throw new ErrorValidacionException("La colonia no pertenece al código postal indicado.");
+        }
+        request.setEstado(cp.getEstado());
+        request.setMunicipio(cp.getMunicipio());
+    }
+
+    private boolean esVacio(String s) { return s == null || s.isBlank(); }
 
     @Transactional(readOnly = true)
     public ClienteDetalleResponse obtenerPorId(Long id) {
@@ -200,61 +208,5 @@ public class ClienteService {
         if (clienteRepository.existsByCorreo(request.getCorreo()) || usuarioRepository.existsByCorreo(request.getCorreo())) {
             throw new CorreoDuplicadoException();
         }
-    }
-
-    private Cliente guardarCliente(ClienteRegistroRequest request) {
-        Cliente cliente = new Cliente();
-        cliente.setNombre(request.getNombre());
-        cliente.setSegundoNombre(request.getSegundoNombre());
-        cliente.setApellidoPaterno(request.getApellidoPaterno());
-        cliente.setApellidoMaterno(request.getApellidoMaterno());
-        cliente.setCurp(request.getCurp());
-        cliente.setRfc(request.getRfc());
-        cliente.setCorreo(request.getCorreo());
-        cliente.setFechaNacimiento(request.getFechaNacimiento());
-        cliente.setSexo(request.getSexo());
-        cliente.setNacionalidad(request.getNacionalidad());
-        cliente.setEstadoCivil(request.getEstadoCivil());
-        cliente.setTelefonoMovil(request.getTelefonoMovil());
-        cliente.setTelefonoAlterno(request.getTelefonoAlterno());
-        cliente.setIngresoMensual(request.getIngresoMensual());
-        cliente.setOcupacion(request.getOcupacion());
-        cliente.setEmpresa(request.getEmpresa());
-        cliente.setActivo(true);
-        return clienteRepository.save(cliente);
-    }
-
-    private void guardarDomicilio(ClienteRegistroRequest request, Cliente cliente) {
-        Domicilio domicilio = new Domicilio();
-        domicilio.setCliente(cliente);
-        domicilio.setCalle(request.getCalle());
-        domicilio.setNumeroExterior(request.getNumeroExterior());
-        domicilio.setNumeroInterior(request.getNumeroInterior());
-        domicilio.setColonia(request.getColonia());
-        domicilio.setMunicipio(request.getMunicipio());
-        domicilio.setEstado(request.getEstado());
-        domicilio.setPais(request.getPais());
-        domicilio.setCp(request.getCp());
-        domicilioRepository.save(domicilio);
-    }
-
-    private void guardarUsuario(ClienteRegistroRequest request, Cliente cliente) {
-        Usuario usuario = new Usuario();
-        usuario.setCliente(cliente);
-        usuario.setCorreo(request.getCorreo());
-        usuario.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        usuario.setActivo(true);
-        usuarioRepository.save(usuario);
-    }
-
-    private Cuenta guardarCuenta(ClienteRegistroRequest request, Cliente cliente) {
-        String numCuenta = cuentaRepository.generarNumeroCuenta();
-        
-        Cuenta cuenta = new Cuenta();
-        cuenta.setCliente(cliente);
-        cuenta.setNumeroCuenta(numCuenta);
-        cuenta.setSaldo(saldoInicial);
-        cuenta.setEstatus(EstatusCuenta.ACTIVA);
-        return cuentaRepository.save(cuenta);
     }
 }

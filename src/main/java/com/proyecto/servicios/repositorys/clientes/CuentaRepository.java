@@ -13,6 +13,6 @@ public interface CuentaRepository extends JpaRepository<Cuenta, Long> {
     Optional<Cuenta> findByNumeroCuenta(String numeroCuenta);
     List<Cuenta> findByClienteId(Long clienteId);
 
-    @Query(value = "SELECT lpad(nextval('seq_numero_cuenta')::text, 10, '0')", nativeQuery = true)
+    @Query(value = "SELECT lpad(CAST(nextval('seq_numero_cuenta') AS text), 10, '0')", nativeQuery = true)
     String generarNumeroCuenta();
 }
