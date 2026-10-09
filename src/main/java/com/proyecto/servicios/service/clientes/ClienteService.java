@@ -14,6 +14,7 @@ import com.proyecto.servicios.repositorys.clientes.ClienteRepository;
 import com.proyecto.servicios.repositorys.clientes.CuentaRepository;
 import com.proyecto.servicios.repositorys.clientes.DomicilioRepository;
 import com.proyecto.servicios.repositorys.clientes.UsuarioRepository;
+import com.proyecto.servicios.util.PasswordSeguraValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -184,6 +185,11 @@ public class ClienteService {
             throw new ErrorValidacionException("El cliente debe tener al menos 18 años.");
         }
 
+        // Validar Contraseña (uso explícito de la excepción solicitada)
+        if (!PasswordSeguraValidator.esValida(request.getPassword())) {
+            throw new ContrasenaInvalidaException();
+        }
+
         // Validar Duplicados
         if (clienteRepository.existsByCurp(request.getCurp())) {
             throw new CurpDuplicadaException();
@@ -204,6 +210,7 @@ public class ClienteService {
         cliente.setApellidoMaterno(request.getApellidoMaterno());
         cliente.setCurp(request.getCurp());
         cliente.setRfc(request.getRfc());
+        cliente.setCorreo(request.getCorreo());
         cliente.setFechaNacimiento(request.getFechaNacimiento());
         cliente.setSexo(request.getSexo());
         cliente.setNacionalidad(request.getNacionalidad());

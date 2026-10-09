@@ -11,6 +11,7 @@ import java.time.OffsetDateTime;
 import com.proyecto.servicios.enums.EstadoCivil;
 import com.proyecto.servicios.enums.Nacionalidad;
 import com.proyecto.servicios.enums.Sexo;
+import com.proyecto.servicios.enums.SexoConverter;
 
 @Entity
 @Table(name = "clientes")
@@ -46,6 +47,7 @@ public class Cliente {
     @Column(name = "activo", nullable = false)
     private Boolean activo = true;
 
+    @Convert(converter = SexoConverter.class)
     @Column(name = "sexo", nullable = false, length = 1)
     private Sexo sexo;
 
