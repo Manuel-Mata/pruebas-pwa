@@ -1,6 +1,7 @@
 package com.proyecto.servicios.service.clientes;
 
 import com.proyecto.servicios.entity.clientes.Usuario;
+import com.proyecto.servicios.exception.onboarding.CuentaBloqueadaException;
 import com.proyecto.servicios.exception.onboarding.CredencialesInvalidasException;
 import com.proyecto.servicios.exception.onboarding.UsuarioInactivoException;
 import com.proyecto.servicios.model.LoginRequest;
@@ -39,13 +40,34 @@ public class AuthService {
         String hash = (usuario != null) ? usuario.getPasswordHash() : hashFicticio;
         boolean coincide = passwordEncoder.matches(request.getPassword(), hash);
 
-        if (usuario == null || !coincide) {
-            log.warn("Autenticación fallida: credenciales inválidas");
-            throw new CredencialesInvalidasException();
-        }
-        if (!Boolean.TRUE.equals(usuario.getActivo())) {
-            log.warn("Autenticación denegada: usuario inactivo. usuarioId={}", usuario.getId());
-            throw new UsuarioInactivoException();
+        if (usuario != null) {
+            if (!Boolean.TRUE.equals(usuario.getActivo())) {
+                log.warn("Autenticación denegada: usuario inactivo. usuarioId={}", usuario.getId());
+                throw new UsuarioInactivoException();
+            }
+
+            if (!coincide) {
+                usuario.setIntentosFallidos(usuario.getIntentosFallidos() + 1);
+                if (usuario.getIntentosFallidos() >= 3) {
+                    usuario.setActivo(false);
+                    usuarioRepository.save(usuario);
+                    log.warn("Cuenta bloqueada por 3 intentos fallidos. usuarioId={}", usuario.getId());
+                    throw new CuentaBloqueadaException();
+                }
+                usuarioRepository.save(usuario);
+                log.warn("Autenticación fallida: credenciales inválidas");
+                throw new CredencialesInvalidasException();
+            } else {
+                if (usuario.getIntentosFallidos() > 0) {
+                    usuario.setIntentosFallidos(0);
+                    usuarioRepository.save(usuario);
+                }
+            }
+        } else {
+            if (!coincide) {
+                log.warn("Autenticación fallida: usuario no existe");
+                throw new CredencialesInvalidasException();
+            }
         }
 
         LoginResponse respuesta = new LoginResponse();

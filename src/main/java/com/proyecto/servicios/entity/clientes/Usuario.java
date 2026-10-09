@@ -37,6 +37,10 @@ public class Usuario {
     @Column(name = "activo", nullable = false)
     private Boolean activo = true;
 
+    @Builder.Default
+    @Column(name = "intentos_fallidos", nullable = false)
+    private Integer intentosFallidos = 0;
+
     @Column(name = "correo", nullable = false, length = 100, unique = true)
     private String correo;
 
