@@ -145,7 +145,7 @@ public class ClienteService {
     @Transactional(readOnly = true)
     public PaginaResponse<ClienteResumenResponse> buscar(ClienteFiltro f, Pageable pageable) {
         log.info("Inicio de búsqueda de clientes");
-        validarOrden(pageable);
+        com.proyecto.servicios.util.OrdenUtil.validar(pageable, CAMPOS_ORDENABLES);
 
         if (f.fechaDesde() != null && f.fechaHasta() != null && f.fechaDesde().isAfter(f.fechaHasta())) {
             throw new ErrorValidacionException("La fecha inicial no puede ser posterior a la fecha final.");
@@ -172,15 +172,6 @@ public class ClienteService {
                 clienteRepository.findAll(spec, pageable).map(this::aResumen);
         log.info("Fin de búsqueda de clientes. total={}", pagina.getTotalElements());
         return PaginaResponse.de(pagina);
-    }
-
-    private void validarOrden(Pageable pageable) {
-        pageable.getSort().forEach(orden -> {
-            if (!CAMPOS_ORDENABLES.contains(orden.getProperty())) {
-                throw new ErrorValidacionException(
-                        "Campo de ordenamiento no permitido. Use: id, nombre, apellidoPaterno, apellidoMaterno, fechaRegistro o activo.");
-            }
-        });
     }
 
     private ClienteResumenResponse aResumen(Cliente c) {
