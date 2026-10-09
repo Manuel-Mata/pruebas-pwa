@@ -5,6 +5,7 @@ Este proyecto es una API REST desarrollada en Java 17 con Spring Boot para gesti
 ## Enlaces del Proyecto
 - **URL Base de Producción (Render):** https://api-clientes-pwa.onrender.com
 - **Documentación Swagger UI:** https://api-clientes-pwa.onrender.com/swagger-ui/index.html
+- **Script de Creación de BD:** [script_creacion_bd.sql](./script_creacion_bd.sql) (Consolidado de Flyway)
 
 ---
 
