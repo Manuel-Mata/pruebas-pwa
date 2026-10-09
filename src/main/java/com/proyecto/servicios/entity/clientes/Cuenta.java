@@ -8,6 +8,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import com.proyecto.servicios.enums.EstatusCuenta;
+import com.proyecto.servicios.enums.EstatusCuentaConverter;
 
 @Entity
 @Table(name = "cuentas")
@@ -42,7 +43,7 @@ public class Cuenta {
     private String numeroCuenta;
 
     @Builder.Default
-    @Enumerated(EnumType.STRING)
-    @Column(name = "estatus", nullable = false, length = 20)
+    @Convert(converter = EstatusCuentaConverter.class)
+    @Column(name = "activa", nullable = false)
     private EstatusCuenta estatus = EstatusCuenta.ACTIVA;
 }
