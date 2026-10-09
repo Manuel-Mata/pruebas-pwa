@@ -13,4 +13,5 @@ public final class Patrones {
             "^[\\p{L}\\p{N}][\\p{L}\\p{N} .,#°'/&()-]*$";
     public static final String TELEFONO = "^\\d{10}$";
     public static final String CP = "^\\d{5}$";
+    public static final String NUMERO_CUENTA = "^\\d{10}$";
 }
