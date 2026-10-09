@@ -5,6 +5,10 @@ import com.proyecto.servicios.entity.clientes.Cuenta;
 import com.proyecto.servicios.entity.clientes.Domicilio;
 import com.proyecto.servicios.entity.clientes.Usuario;
 import com.proyecto.servicios.enums.EstatusCuenta;
+import com.proyecto.servicios.exception.onboarding.ClienteNoEncontradoException;
+import com.proyecto.servicios.exception.onboarding.ClienteInactivoException;
+import com.proyecto.servicios.exception.onboarding.CorreoDuplicadoException;
+import com.proyecto.servicios.model.ClienteActualizacionRequest;
 import com.proyecto.servicios.model.ClienteRegistroRequest;
 import com.proyecto.servicios.model.ClienteRegistroResponse;
 import com.proyecto.servicios.repositorys.clientes.ClienteRepository;
@@ -18,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.function.Consumer;
 
 @Service
 @RequiredArgsConstructor
@@ -109,5 +114,59 @@ public class ClientePersistenciaService {
         cuenta.setSaldo(saldoInicial);
         cuenta.setEstatus(EstatusCuenta.ACTIVA);
         return cuentaRepository.save(cuenta);
+    }
+
+    @Transactional
+    public void aplicarActualizacion(Long id, ClienteActualizacionRequest r, ClienteService.ResultadoPostal resultadoPostal) {
+        Cliente cliente = clienteRepository.findById(id).orElseThrow(ClienteNoEncontradoException::new);
+        if (!cliente.getActivo()) throw new ClienteInactivoException();
+
+        if (r.getCorreo() != null && !r.getCorreo().equals(cliente.getCorreo())) {
+            if (clienteRepository.existsByCorreo(r.getCorreo()) || usuarioRepository.existsByCorreo(r.getCorreo())) {
+                throw new CorreoDuplicadoException();
+            }
+            cliente.setCorreo(r.getCorreo());
+            Usuario usuario = usuarioRepository.findByClienteId(id).orElseThrow();
+            usuario.setCorreo(r.getCorreo());
+            usuarioRepository.save(usuario);
+        }
+
+        aplicar(r.getNombre(), cliente::setNombre);
+        aplicar(r.getSegundoNombre(), cliente::setSegundoNombre);
+        aplicar(r.getApellidoPaterno(), cliente::setApellidoPaterno);
+        aplicar(r.getApellidoMaterno(), cliente::setApellidoMaterno);
+        aplicar(r.getFechaNacimiento(), cliente::setFechaNacimiento);
+        aplicar(r.getSexo(), cliente::setSexo);
+        aplicar(r.getNacionalidad(), cliente::setNacionalidad);
+        aplicar(r.getEstadoCivil(), cliente::setEstadoCivil);
+        aplicar(r.getTelefonoMovil(), cliente::setTelefonoMovil);
+        aplicar(r.getTelefonoAlterno(), cliente::setTelefonoAlterno);
+        aplicar(r.getIngresoMensual(), cliente::setIngresoMensual);
+        aplicar(r.getOcupacion(), cliente::setOcupacion);
+        aplicar(r.getEmpresa(), cliente::setEmpresa);
+
+        clienteRepository.save(cliente);
+
+        if (r.getCp() != null || r.getCalle() != null || r.getNumeroExterior() != null || r.getNumeroInterior() != null || r.getColonia() != null || resultadoPostal != null) {
+            Domicilio dom = domicilioRepository.findByClienteId(id).orElseThrow();
+            aplicar(r.getCalle(), dom::setCalle);
+            aplicar(r.getNumeroExterior(), dom::setNumeroExterior);
+            aplicar(r.getNumeroInterior(), dom::setNumeroInterior);
+            
+            if (resultadoPostal != null) {
+                dom.setCp(resultadoPostal.cp().getCp());
+                dom.setColonia(resultadoPostal.coloniaOficial());
+                dom.setEstado(resultadoPostal.cp().getEstado());
+                dom.setMunicipio(resultadoPostal.cp().getMunicipio());
+            } else {
+                aplicar(r.getCp(), dom::setCp);
+                aplicar(r.getColonia(), dom::setColonia);
+            }
+            domicilioRepository.save(dom);
+        }
+    }
+
+    private <T> void aplicar(T valor, Consumer<T> setter) {
+        if (valor != null) setter.accept(valor);
     }
 }

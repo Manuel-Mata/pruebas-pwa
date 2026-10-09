@@ -7,6 +7,7 @@ import com.proyecto.servicios.entity.clientes.Usuario;
 import com.proyecto.servicios.enums.EstatusCuenta;
 import com.proyecto.servicios.enums.Pais;
 import com.proyecto.servicios.exception.onboarding.*;
+import com.proyecto.servicios.model.ClienteActualizacionRequest;
 import com.proyecto.servicios.model.ClienteDetalleResponse;
 import com.proyecto.servicios.model.ClienteRegistroRequest;
 import com.proyecto.servicios.model.ClienteRegistroResponse;
@@ -64,6 +65,8 @@ public class ClienteService {
         return persistenciaService.guardarTodo(request);
     }
 
+    public record ResultadoPostal(CodigoPostalResponse cp, String coloniaOficial) {}
+
     private void validarCodigoPostal(ClienteRegistroRequest request) {
         if (!validacionPostalObligatoria) {
             if (esVacio(request.getEstado()) || esVacio(request.getMunicipio())) {
@@ -72,21 +75,25 @@ public class ClienteService {
             }
             return;
         }
-        CodigoPostalResponse cp;
+        ResultadoPostal res = validarColonia(request.getCp(), request.getColonia());
+        request.setColonia(res.coloniaOficial());
+        request.setEstado(res.cp().getEstado());
+        request.setMunicipio(res.cp().getMunicipio());
+    }
+
+    private ResultadoPostal validarColonia(String cp, String colonia) {
+        CodigoPostalResponse respuesta;
         try {
-            cp = codigoPostalService.consultar(request.getCp());
+            respuesta = codigoPostalService.consultar(cp);
         } catch (CodigoPostalNoEncontradoException e) {
             throw new ErrorValidacionException("El código postal no existe en el catálogo.");
         }
-        String buscada = TextoUtil.normalizar(request.getColonia());
-        boolean coincide = cp.getColonias().stream()
-                .map(TextoUtil::normalizar)
-                .anyMatch(buscada::equals);
-        if (!coincide) {
-            throw new ErrorValidacionException("La colonia no pertenece al código postal indicado.");
-        }
-        request.setEstado(cp.getEstado());
-        request.setMunicipio(cp.getMunicipio());
+        String buscada = TextoUtil.normalizar(colonia);
+        String oficial = respuesta.getColonias().stream()
+                .filter(c -> TextoUtil.normalizar(c).equals(buscada))
+                .findFirst()
+                .orElseThrow(() -> new ErrorValidacionException("La colonia no pertenece al código postal indicado."));
+        return new ResultadoPostal(respuesta, oficial);
     }
 
     private boolean esVacio(String s) { return s == null || s.isBlank(); }
@@ -100,6 +107,26 @@ public class ClienteService {
         List<Cuenta> cuentas = cuentaRepository.findByClienteId(id);
 
         return mapearADetalle(cliente, domicilio, cuentas);
+    }
+
+    public ClienteDetalleResponse actualizar(Long id, ClienteActualizacionRequest r) {
+        if (!r.tieneCambios()) {
+            throw new ErrorValidacionException("Debe enviar al menos un campo para actualizar.");
+        }
+        if (r.getCorreo() != null) r.setCorreo(r.getCorreo().trim().toLowerCase());
+        if (r.getFechaNacimiento() != null) validarMayoriaDeEdad(r.getFechaNacimiento());
+
+        ResultadoPostal resultadoPostal = null;
+        if (validacionPostalObligatoria && (r.getCp() != null || r.getColonia() != null)) {
+            Domicilio domActual = domicilioRepository.findByClienteId(id)
+                    .orElseThrow(ClienteNoEncontradoException::new);
+            String cpAValidar = r.getCp() != null ? r.getCp() : domActual.getCp();
+            String colAValidar = r.getColonia() != null ? r.getColonia() : domActual.getColonia();
+            resultadoPostal = validarColonia(cpAValidar, colAValidar);
+        }
+
+        persistenciaService.aplicarActualizacion(id, r, resultadoPostal);
+        return obtenerPorId(id);
     }
 
     @Transactional
@@ -188,10 +215,7 @@ public class ClienteService {
 
     private void validarNegocio(ClienteRegistroRequest request) {
         // Validar Edad
-        int edad = Period.between(request.getFechaNacimiento(), LocalDate.now(clock)).getYears();
-        if (edad < 18) {
-            throw new ErrorValidacionException("El cliente debe tener al menos 18 años.");
-        }
+        validarMayoriaDeEdad(request.getFechaNacimiento());
 
         // Validar Contraseña (uso explícito de la excepción solicitada)
         if (!PasswordSeguraValidator.esValida(request.getPassword())) {
@@ -207,6 +231,13 @@ public class ClienteService {
         }
         if (clienteRepository.existsByCorreo(request.getCorreo()) || usuarioRepository.existsByCorreo(request.getCorreo())) {
             throw new CorreoDuplicadoException();
+        }
+    }
+
+    private void validarMayoriaDeEdad(LocalDate fechaNacimiento) {
+        int edad = Period.between(fechaNacimiento, LocalDate.now(clock)).getYears();
+        if (edad < 18) {
+            throw new ErrorValidacionException("El cliente debe tener al menos 18 años.");
         }
     }
 }

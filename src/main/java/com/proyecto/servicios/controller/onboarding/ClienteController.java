@@ -2,6 +2,7 @@ package com.proyecto.servicios.controller.onboarding;
 
 import com.proyecto.servicios.model.ClienteRegistroRequest;
 import com.proyecto.servicios.model.ClienteRegistroResponse;
+import com.proyecto.servicios.model.ClienteActualizacionRequest;
 import com.proyecto.servicios.model.ClienteDetalleResponse;
 import com.proyecto.servicios.model.GenericResponse;
 import com.proyecto.servicios.service.clientes.ClienteService;
@@ -36,5 +37,11 @@ public class ClienteController {
         response.setCodigo(200);
         response.setMensaje("Cliente dado de baja exitosamente.");
         return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{id}")
+    public ClienteDetalleResponse actualizar(@PathVariable Long id,
+            @Valid @RequestBody ClienteActualizacionRequest request) {
+        return clienteService.actualizar(id, request);
     }
 }
