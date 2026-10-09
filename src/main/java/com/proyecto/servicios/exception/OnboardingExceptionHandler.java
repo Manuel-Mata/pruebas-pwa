@@ -3,6 +3,7 @@ package com.proyecto.servicios.exception;
 import com.proyecto.servicios.exception.onboarding.OnboardingException;
 import com.proyecto.servicios.model.GenericResponse;
 import com.proyecto.servicios.model.ValidacionResponse;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -65,7 +66,11 @@ public class OnboardingExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<GenericResponse> handleConstraintViolation(ConstraintViolationException ex) {
         log.warn("ConstraintViolationException: {}", ex.getMessage());
-        return construirRespuesta(HttpStatus.BAD_REQUEST, "Datos de petición inválidos.");
+        String detalle = ex.getConstraintViolations().stream()
+                .map(ConstraintViolation::getMessage)
+                .sorted()
+                .collect(Collectors.joining(" | "));
+        return construirRespuesta(HttpStatus.BAD_REQUEST, detalle.isBlank() ? "Datos de petición inválidos." : detalle);
     }
 
     @ExceptionHandler(HandlerMethodValidationException.class)
