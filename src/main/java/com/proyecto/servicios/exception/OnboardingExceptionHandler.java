@@ -13,6 +13,8 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
@@ -64,6 +66,18 @@ public class OnboardingExceptionHandler {
     public ResponseEntity<GenericResponse> handleConstraintViolation(ConstraintViolationException ex) {
         log.warn("ConstraintViolationException: {}", ex.getMessage());
         return construirRespuesta(HttpStatus.BAD_REQUEST, "Datos de petición inválidos.");
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<GenericResponse> handleValidacionMetodo(HandlerMethodValidationException ex) {
+        log.warn("HandlerMethodValidationException atrapada.");
+        return construirRespuesta(HttpStatus.BAD_REQUEST, "Parámetros de la petición inválidos.");
+    }
+
+    @ExceptionHandler(PropertyReferenceException.class)
+    public ResponseEntity<GenericResponse> handleOrdenInvalido(PropertyReferenceException ex) {
+        log.warn("PropertyReferenceException atrapada.");
+        return construirRespuesta(HttpStatus.BAD_REQUEST, "Campo de ordenamiento inválido.");
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

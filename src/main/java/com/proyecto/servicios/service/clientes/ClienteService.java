@@ -11,6 +11,12 @@ import com.proyecto.servicios.model.ClienteActualizacionRequest;
 import com.proyecto.servicios.model.ClienteDetalleResponse;
 import com.proyecto.servicios.model.ClienteRegistroRequest;
 import com.proyecto.servicios.model.ClienteRegistroResponse;
+import com.proyecto.servicios.model.ClienteFiltro;
+import com.proyecto.servicios.model.ClienteResumenResponse;
+import com.proyecto.servicios.model.PaginaResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import com.proyecto.servicios.repositorys.clientes.ClienteRepository;
 import com.proyecto.servicios.repositorys.clientes.CuentaRepository;
 import com.proyecto.servicios.repositorys.clientes.DomicilioRepository;
@@ -31,7 +37,11 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.OffsetDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Set;
+import java.util.Locale;
 
 @Slf4j
 @Service
@@ -128,6 +138,69 @@ public class ClienteService {
         persistenciaService.aplicarActualizacion(id, r, resultadoPostal);
         return obtenerPorId(id);
     }
+
+    private static final Set<String> CAMPOS_ORDENABLES =
+            Set.of("id", "nombre", "apellidoPaterno", "apellidoMaterno", "fechaRegistro", "activo");
+
+    @Transactional(readOnly = true)
+    public PaginaResponse<ClienteResumenResponse> buscar(ClienteFiltro f, Pageable pageable) {
+        log.info("Inicio de búsqueda de clientes");
+        validarOrden(pageable);
+
+        if (f.fechaDesde() != null && f.fechaHasta() != null && f.fechaDesde().isAfter(f.fechaHasta())) {
+            throw new ErrorValidacionException("La fecha inicial no puede ser posterior a la fecha final.");
+        }
+        ZoneId zona = clock.getZone();
+        OffsetDateTime desde = f.fechaDesde() == null ? null
+                : f.fechaDesde().atStartOfDay(zona).toOffsetDateTime();
+        OffsetDateTime limite = f.fechaHasta() == null ? null
+                : f.fechaHasta().plusDays(1).atStartOfDay(zona).toOffsetDateTime();
+
+        Specification<Cliente> spec = Specification.allOf(
+                ClienteSpecification.contiene("nombre", limpiar(f.nombre())),
+                ClienteSpecification.contiene("apellidoPaterno", limpiar(f.apellidoPaterno())),
+                ClienteSpecification.contiene("apellidoMaterno", limpiar(f.apellidoMaterno())),
+                ClienteSpecification.igual("curp", mayusculas(limpiar(f.curp()))),
+                ClienteSpecification.igual("rfc", mayusculas(limpiar(f.rfc()))),
+                ClienteSpecification.igual("correo", minusculas(limpiar(f.correo()))),
+                ClienteSpecification.igual("activo", f.activo()),
+                ClienteSpecification.registradoDesde(desde),
+                ClienteSpecification.registradoAntesDe(limite),
+                ClienteSpecification.conNumeroCuenta(limpiar(f.numeroCuenta())));
+
+        Page<ClienteResumenResponse> pagina =
+                clienteRepository.findAll(spec, pageable).map(this::aResumen);
+        log.info("Fin de búsqueda de clientes. total={}", pagina.getTotalElements());
+        return PaginaResponse.de(pagina);
+    }
+
+    private void validarOrden(Pageable pageable) {
+        pageable.getSort().forEach(orden -> {
+            if (!CAMPOS_ORDENABLES.contains(orden.getProperty())) {
+                throw new ErrorValidacionException(
+                        "Campo de ordenamiento no permitido. Use: id, nombre, apellidoPaterno, apellidoMaterno, fechaRegistro o activo.");
+            }
+        });
+    }
+
+    private ClienteResumenResponse aResumen(Cliente c) {
+        return ClienteResumenResponse.builder()
+                .id(c.getId())
+                .nombreCompleto(TextoUtil.nombreCompleto(
+                        c.getNombre(), c.getSegundoNombre(), c.getApellidoPaterno(), c.getApellidoMaterno()))
+                .curp(c.getCurp()).rfc(c.getRfc()).correo(c.getCorreo())
+                .telefonoMovil(c.getTelefonoMovil())
+                .activo(c.getActivo()).fechaRegistro(c.getFechaRegistro())
+                .build();
+    }
+
+    private static String limpiar(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
+    private static String mayusculas(String s) { return s == null ? null : s.toUpperCase(Locale.ROOT); }
+    private static String minusculas(String s) { return s == null ? null : s.toLowerCase(Locale.ROOT); }
 
     @Transactional
     public void darDeBaja(Long id) {
