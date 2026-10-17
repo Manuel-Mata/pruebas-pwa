@@ -89,22 +89,27 @@ Decisiones de diseño: claves `BIGINT`, dinero en `NUMERIC` (nunca flotantes), f
 
 ## 3. Endpoints
 
-| Método | Ruta | Acceso | Descripción |
-|---|---|---|---|
-| POST | `/auth/login` | Público | Devuelve el JWT |
-| POST | `/clientes` | Público | Registra cliente, domicilio, usuario y cuenta en **una sola transacción** |
-| GET | `/clientes` | Token | Búsqueda paginada con filtros combinables |
-| GET | `/clientes/{id}` | Token | Detalle (con domicilio y cuentas) |
-| PATCH | `/clientes/{id}` | Token | Actualización parcial (no permite CURP, RFC ni número de cuenta) |
-| PATCH | `/clientes/{id}/baja` | Token | Baja lógica: desactiva cliente, usuario y cuentas |
-| GET | `/cuentas/{numeroCuenta}` | Token | Consulta una cuenta |
-| GET | `/cuentas?clienteId=` o `?estatus=` | Token | Cuentas por cliente o por estatus |
-| POST | `/cuentas` | Token | Crea una cuenta adicional |
-| PATCH | `/cuentas/{numeroCuenta}` | Token | Cambia el estatus (ACTIVA/INACTIVA) |
-| GET | `/usuarios/filtro` | Token | Búsqueda paginada de usuarios (`correo`, `activo`, `clienteId`) |
-| PUT | `/usuarios/agregar` | Token | Crea el usuario de un cliente activo que no lo tenga |
+La API cumple estrictamente las directivas de arquitectura: **cero `@PathVariable`**, **cero `@RequestParam`**, criterios de búsqueda y parámetros recibidos exclusivamente mediante **`@RequestBody` con Bean Validation (`@Valid`)**, y respuesta unificada mediante **`GenericResponse<T>`**.
 
-**Filtros de `GET /clientes`** (se combinan con AND): `nombre`, `apellidoPaterno`, `apellidoMaterno` (contiene, sin distinguir mayúsculas), `curp`, `rfc`, `correo` (exactos), `activo`, `fechaDesde`, `fechaHasta` (`yyyy-MM-dd`) y `numeroCuenta`. Paginación: `page`, `size` (máx. 100) y `sort` (`id`, `nombre`, `apellidoPaterno`, `apellidoMaterno`, `fechaRegistro`, `activo`).
+| Método | Ruta | Acceso | Body Request DTO | Descripción |
+|---|---|---|---|---|
+| POST | `/auth/login` | Público | `LoginRequest` | Autenticación y obtención de JWT en `datos.token` |
+| POST | `/catalogos/codigo-postal` | Público | `CodigoPostalRequest` | Consulta información geográfica de un CP |
+| POST | `/clientes` | Público | `ClienteRegistroRequest` | Registra cliente, domicilio, usuario y cuenta en **una sola transacción** |
+| POST | `/clientes/buscar` | Token | `ClienteBusquedaRequest` | Endpoint único de consulta: búsqueda por ID o filtros dinámicos combinables con paginación |
+| PATCH | `/clientes` | Token | `ClienteActualizacionRequest` | Actualización parcial con `id` en el cuerpo (no permite CURP, RFC ni cuentas) |
+| PATCH | `/clientes/baja` | Token | `ClienteBajaRequest` | Baja lógica con `id` en el cuerpo: desactiva cliente, usuario y cuentas |
+| POST | `/cuentas` | Token | `CuentaCreacionRequest` | Crea una cuenta adicional (`saldoInicial` controlado por el servidor en 0.00) |
+| POST | `/cuentas/buscar` | Token | `CuentaBusquedaRequest` | Endpoint único de consulta de cuentas (por `numeroCuenta`, `clienteId`, `estatus`). Incluye saldo en cada cuenta. |
+| PATCH | `/cuentas` | Token | `CuentaEstatusRequest` | Actualiza estatus con `numeroCuenta` y `estatus` en el cuerpo |
+| POST | `/usuarios/buscar` | Token | `UsuarioBusquedaRequest` | Búsqueda paginada de usuarios (`correo`, `activo`, `clienteId`, paginación) |
+| PUT | `/usuarios/agregar` | Token | `UsuarioAgregarRequest` | Crea el usuario de un cliente activo que no lo tenga |
+
+### Criterios de `POST /clientes/buscar`
+Permite enviar en el cuerpo JSON:
+- `id` (Long): si se proporciona, devuelve el detalle del cliente específico.
+- Filtros combinables: `nombre`, `apellidoPaterno`, `apellidoMaterno` (búsqueda parcial insensible a mayúsculas), `curp`, `rfc`, `correo`, `activo`, `fechaDesde`, `fechaHasta` (`yyyy-MM-dd`) y `numeroCuenta`.
+- Paginación y ordenamiento: `pagina` (min 0), `tamano` (1 a 100), `ordenarPor` y `direccion` (`ASC`/`DESC`).
 
 ### Ejemplo: registrar un cliente
 `POST /clientes`
@@ -133,21 +138,41 @@ Decisiones de diseño: claves `BIGINT`, dinero en `NUMERIC` (nunca flotantes), f
 ```
 Respuesta `201`:
 ```json
-{ "clienteId": 4, "nombreCompleto": "Ana Maria Lopez Gomez", "numeroCuenta": "1000000002",
-  "correo": "ana.roma@test.com", "mensaje": "Cliente registrado exitosamente." }
+{
+  "codigo": 201,
+  "mensaje": "Cliente registrado exitosamente.",
+  "datos": {
+    "clienteId": 4,
+    "nombreCompleto": "Ana Maria Lopez Gomez",
+    "numeroCuenta": "1000000002",
+    "correo": "ana.roma@test.com"
+  }
+}
 ```
-Estado y municipio **no se envían**: los rellena Postali a partir del CP.
+Estado y municipio **no se envían**: los completa Postali a partir del CP.
 
-## 4. Formato de errores
-Toda respuesta de error tiene `codigo` y `mensaje` (las validaciones agregan `errores` por campo):
+## 4. Estructura Uniforme de Respuestas (`GenericResponse<T>`)
+Todas las respuestas de la API (tanto exitosas como de error) comparten la misma estructura uniforme:
+```json
+{
+  "codigo": 200,
+  "mensaje": "Descripción de la operación o del error",
+  "datos": { ... }
+}
+```
+- **Éxito (200 / 201):** `datos` contiene el objeto de transferencia de datos resultante (o `null` en operaciones como baja lógica).
+- **Error de Validación (400):** `mensaje` detalla los campos inválidos y `datos` incluye el mapa `{ "campo": "motivo" }`.
+- **Error de Negocio (404 / 409):** `mensaje` describe el problema específico de negocio y `datos` es `null`.
+- **Error Inesperado (500):** Se emite un código UUID de referencia para rastreo sin exponer detalles técnicos ni consultas SQL.
 
 | Código | Cuándo |
 |---|---|
-| 400 | Validación, JSON inválido, tipo incorrecto, CP o colonia inválidos |
+| 400 | Validación de Bean Validation, JSON inválido, tipo incorrecto, campos controlados por el servidor o CP/colonia inválidos |
 | 401 | Token ausente, inválido o vencido; credenciales incorrectas |
-| 403 | Usuario inactivo o bloqueado por demasiados intentos |
-| 404 | Cliente, cuenta, usuario o código postal inexistente; ruta inexistente |
+| 403 | Usuario inactivo o bloqueado por 3 intentos fallidos consecutivos |
+| 404 | Cliente, cuenta, usuario o recurso inexistente |
 | 409 | CURP, RFC o correo duplicado; cliente inactivo; usuario ya existente |
+| 500 | Error interno no controlado (con ID de rastreo para auditoría) |
 | 503 | Servicio de códigos postales (Postali) no disponible |
 
 ## 5. Reglas de negocio

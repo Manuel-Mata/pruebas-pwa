@@ -11,11 +11,14 @@ import com.proyecto.servicios.model.ClienteActualizacionRequest;
 import com.proyecto.servicios.model.ClienteDetalleResponse;
 import com.proyecto.servicios.model.ClienteRegistroRequest;
 import com.proyecto.servicios.model.ClienteRegistroResponse;
+import com.proyecto.servicios.model.ClienteBusquedaRequest;
 import com.proyecto.servicios.model.ClienteFiltro;
 import com.proyecto.servicios.model.ClienteResumenResponse;
 import com.proyecto.servicios.model.PaginaResponse;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import com.proyecto.servicios.repositorys.clientes.ClienteRepository;
 import com.proyecto.servicios.repositorys.clientes.CuentaRepository;
@@ -139,8 +142,23 @@ public class ClienteService {
         return obtenerPorId(id);
     }
 
+    public ClienteDetalleResponse actualizar(ClienteActualizacionRequest r) {
+        return actualizar(r.getId(), r);
+    }
+
     private static final Set<String> CAMPOS_ORDENABLES =
             Set.of("id", "nombre", "apellidoPaterno", "apellidoMaterno", "fechaRegistro", "activo");
+
+    @Transactional(readOnly = true)
+    public PaginaResponse<ClienteResumenResponse> buscar(ClienteBusquedaRequest req) {
+        Sort.Direction dir = "DESC".equalsIgnoreCase(req.getDireccion()) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(req.getPagina(), req.getTamano(), Sort.by(dir, req.getOrdenarPor()));
+        ClienteFiltro filtro = new ClienteFiltro(
+                req.getNombre(), req.getApellidoPaterno(), req.getApellidoMaterno(),
+                req.getCurp(), req.getRfc(), req.getCorreo(), req.getActivo(),
+                req.getFechaDesde(), req.getFechaHasta(), req.getNumeroCuenta());
+        return buscar(filtro, pageable);
+    }
 
     @Transactional(readOnly = true)
     public PaginaResponse<ClienteResumenResponse> buscar(ClienteFiltro f, Pageable pageable) {

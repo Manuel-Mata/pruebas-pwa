@@ -16,6 +16,10 @@ import java.util.stream.Stream;
 @Getter @Setter
 public class ClienteActualizacionRequest {
 
+    @NotNull(message = "El id del cliente es obligatorio")
+    @Positive(message = "El id del cliente debe ser mayor a cero")
+    private Long id;
+
     @Size(max = 50, message = "El nombre debe tener máximo 50 caracteres")
     @Pattern(regexp = Patrones.NOMBRE, message = "El nombre contiene caracteres no permitidos")
     private String nombre;

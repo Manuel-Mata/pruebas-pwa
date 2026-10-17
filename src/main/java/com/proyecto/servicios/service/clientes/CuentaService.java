@@ -7,7 +7,9 @@ import com.proyecto.servicios.exception.onboarding.ClienteInactivoException;
 import com.proyecto.servicios.exception.onboarding.ClienteNoEncontradoException;
 import com.proyecto.servicios.exception.onboarding.CuentaNoEncontradaException;
 import com.proyecto.servicios.exception.onboarding.ErrorValidacionException;
+import com.proyecto.servicios.model.CuentaBusquedaRequest;
 import com.proyecto.servicios.model.CuentaCreacionRequest;
+import com.proyecto.servicios.model.CuentaEstatusRequest;
 import com.proyecto.servicios.model.CuentaResponse;
 import com.proyecto.servicios.model.SaldoResponse;
 import com.proyecto.servicios.repositorys.clientes.ClienteRepository;
@@ -44,6 +46,24 @@ public class CuentaService {
     }
 
     @Transactional(readOnly = true)
+    public List<CuentaResponse> buscar(CuentaBusquedaRequest req) {
+        if (req.getNumeroCuenta() != null && !req.getNumeroCuenta().isBlank()) {
+            return List.of(obtener(req.getNumeroCuenta().trim()));
+        }
+        if (req.getClienteId() != null) {
+            if (!clienteRepository.existsById(req.getClienteId())) throw new ClienteNoEncontradoException();
+            List<Cuenta> cuentas = (req.getEstatus() != null)
+                    ? cuentaRepository.findByClienteIdAndEstatus(req.getClienteId(), req.getEstatus())
+                    : cuentaRepository.findByClienteId(req.getClienteId());
+            return cuentas.stream().map(this::aRespuesta).toList();
+        }
+        if (req.getEstatus() != null) {
+            return cuentaRepository.findByEstatus(req.getEstatus()).stream().map(this::aRespuesta).toList();
+        }
+        return cuentaRepository.findAll().stream().map(this::aRespuesta).toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<CuentaResponse> buscar(Long clienteId, EstatusCuenta estatus) {
         List<Cuenta> cuentas;
         if (clienteId != null) {
@@ -68,9 +88,14 @@ public class CuentaService {
         Cuenta cuenta = new Cuenta();
         cuenta.setCliente(cliente);
         cuenta.setNumeroCuenta(cuentaRepository.generarNumeroCuenta());
-        cuenta.setSaldo(request.getSaldoInicial() != null ? request.getSaldoInicial() : saldoInicialPorDefecto);
+        cuenta.setSaldo(saldoInicialPorDefecto);
         cuenta.setEstatus(EstatusCuenta.ACTIVA);
         return aRespuesta(cuentaRepository.save(cuenta));
+    }
+
+    @Transactional
+    public CuentaResponse actualizarEstatus(CuentaEstatusRequest req) {
+        return actualizarEstatus(req.getNumeroCuenta(), req.getEstatus());
     }
 
     @Transactional
