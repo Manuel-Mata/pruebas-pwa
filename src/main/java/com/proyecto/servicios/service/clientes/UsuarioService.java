@@ -9,6 +9,7 @@ import com.proyecto.servicios.exception.onboarding.CorreoDuplicadoException;
 import com.proyecto.servicios.exception.onboarding.UsuarioYaExisteException;
 import com.proyecto.servicios.model.PaginaResponse;
 import com.proyecto.servicios.model.UsuarioAgregarRequest;
+import com.proyecto.servicios.model.UsuarioBusquedaRequest;
 import com.proyecto.servicios.model.UsuarioResponse;
 import com.proyecto.servicios.repositorys.clientes.ClienteRepository;
 import com.proyecto.servicios.repositorys.clientes.UsuarioRepository;
@@ -16,7 +17,9 @@ import com.proyecto.servicios.util.OrdenUtil;
 import com.proyecto.servicios.util.PasswordSeguraValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -34,6 +37,13 @@ public class UsuarioService {
     private final UsuarioRepository usuarioRepository;
     private final ClienteRepository clienteRepository;
     private final PasswordEncoder passwordEncoder;
+
+    @Transactional(readOnly = true)
+    public PaginaResponse<UsuarioResponse> buscar(UsuarioBusquedaRequest req) {
+        Sort.Direction dir = "DESC".equalsIgnoreCase(req.getDireccion()) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(req.getPagina(), req.getTamano(), Sort.by(dir, req.getOrdenarPor()));
+        return buscar(req.getCorreo(), req.getActivo(), req.getClienteId(), pageable);
+    }
 
     @Transactional(readOnly = true)
     public PaginaResponse<UsuarioResponse> buscar(String correo, Boolean activo, Long clienteId, Pageable pageable) {

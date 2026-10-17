@@ -45,7 +45,7 @@ public class SecurityConfig {
                     escribir(res, 403, "No tiene permisos para acceder a este recurso.")))
             .authorizeHttpRequests(a -> a
                 .requestMatchers(HttpMethod.POST, "/auth/login", "/clientes").permitAll()
-                .requestMatchers(HttpMethod.GET, "/catalogos/**").permitAll()
+                .requestMatchers("/catalogos/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**",
                                  "/actuator/health", "/error").permitAll()
                 .anyRequest().authenticated())
@@ -63,9 +63,7 @@ public class SecurityConfig {
         res.setStatus(status);
         res.setContentType(MediaType.APPLICATION_JSON_VALUE);
         res.setCharacterEncoding("UTF-8");
-        GenericResponse cuerpo = new GenericResponse();
-        cuerpo.setCodigo(status);
-        cuerpo.setMensaje(mensaje);
+        GenericResponse<Void> cuerpo = GenericResponse.error(status, mensaje);
         objectMapper.writeValue(res.getWriter(), cuerpo);
     }
 }
