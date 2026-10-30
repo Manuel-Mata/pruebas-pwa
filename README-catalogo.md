@@ -21,7 +21,7 @@ pasar por nuestra copia local.
 ## Arquitectura (capas)
 
 ```
-CatalogoController          → REST
+CatalogoGestoPagoController → REST
   └─ CatalogoService        → reglas de negocio (límite diario, validación de código de respuesta)
       ├─ GestoPagoCatalogoClient   → Feign client hacia GestoPago (XML)
       ├─ GestoPagoTokenService     → reutiliza el mismo token Bearer que ya administra la integración de autenticación (renovación automática cada hora, válido 24h)
