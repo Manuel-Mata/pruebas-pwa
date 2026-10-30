@@ -61,6 +61,9 @@ public class TransaccionServiceImpl implements TransaccionService {
 
     @Override
     public TransaccionResponse procesar(TransaccionSolicitudRequest request) {
+        log.info("Inicia procesamiento de transacción (cuentaId={}, idServicio={}, idProducto={}, upc={})",
+                request.getCuentaId(), request.getIdServicio(), request.getIdProducto(), request.getIdempotencyKey());
+
         ProductoCatalogo producto = buscarProductoEnCatalogo(request.getIdServicio(), request.getIdProducto());
         String horaLocal = LocalDateTime.now().format(FORMATO_HORA_LOCAL);
 
@@ -85,6 +88,9 @@ public class TransaccionServiceImpl implements TransaccionService {
         Transaccion actualizada = respuesta.fueExitosa()
                 ? persistenciaService.confirmarExitosa(transaccion.getId(), respuesta)
                 : persistenciaService.marcarFallida(transaccion.getId(), respuesta, null);
+
+        log.info("Termina procesamiento de transacción (transaccionId={}, upc={}, estado={})",
+                actualizada.getId(), actualizada.getUpc(), actualizada.getEstado());
 
         return mapearRespuesta(actualizada);
     }
