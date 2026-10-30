@@ -1,5 +1,7 @@
 package com.proyecto.servicios.model.gestopago.catalogo;
 
+import com.proyecto.servicios.model.gestopago.MensajeDto;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;

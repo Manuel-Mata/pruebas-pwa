@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,4 +21,10 @@ public interface CuentaRepository extends JpaRepository<Cuenta, Long> {
 
     @Query(value = "SELECT lpad(CAST(nextval('seq_numero_cuenta') AS text), 10, '0')", nativeQuery = true)
     String generarNumeroCuenta();
+
+    // Lock pesimista al debitar saldo en sendTx, para que dos solicitudes
+    // concurrentes sobre la misma cuenta no la dejen en negativo.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Cuenta c where c.id = :cuentaId")
+    Optional<Cuenta> buscarConLockParaActualizar(Long cuentaId);
 }

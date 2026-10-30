@@ -1,7 +1,6 @@
 package com.proyecto.servicios.service.catalogo;
 
 import com.proyecto.servicios.client.GestoPagoCatalogoClient;
-import com.proyecto.servicios.entity.gestopago.GestoPagoToken;
 import com.proyecto.servicios.entity.mongo.CatalogoSnapshot;
 import com.proyecto.servicios.entity.mongo.ProductoCatalogo;
 import com.proyecto.servicios.exception.AutenticacionGestoPagoException;
@@ -13,10 +12,10 @@ import com.proyecto.servicios.mapper.CatalogoMapper;
 import com.proyecto.servicios.model.catalogo.CatalogoSincronizacionResponse;
 import com.proyecto.servicios.model.catalogo.ProductoCatalogoResponse;
 import com.proyecto.servicios.model.gestopago.catalogo.CatalogoResponse;
-import com.proyecto.servicios.model.gestopago.catalogo.MensajeDto;
+import com.proyecto.servicios.model.gestopago.MensajeDto;
 import com.proyecto.servicios.model.gestopago.catalogo.ProductoDto;
 import com.proyecto.servicios.repositorys.mongo.CatalogoSnapshotRepository;
-import com.proyecto.servicios.service.GestoPagoTokenService;
+import com.proyecto.servicios.service.GestoPagoAuthorizationHeaderProvider;
 import com.proyecto.servicios.service.catalogo.Impl.CatalogoServiceImpl;
 import feign.FeignException;
 import feign.RetryableException;
@@ -46,7 +45,7 @@ class CatalogoServiceImplTest {
     @Mock
     private GestoPagoCatalogoClient catalogoClient;
     @Mock
-    private GestoPagoTokenService tokenService;
+    private GestoPagoAuthorizationHeaderProvider authorizationHeaderProvider;
     @Mock
     private CatalogoSnapshotRepository snapshotRepository;
     @Mock
@@ -60,24 +59,17 @@ class CatalogoServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new CatalogoServiceImpl(catalogoClient, tokenService, snapshotRepository, catalogoMapper);
+        service = new CatalogoServiceImpl(catalogoClient, authorizationHeaderProvider, snapshotRepository, catalogoMapper);
         ReflectionTestUtils.setField(service, "idDistribuidor", ID_DISTRIBUIDOR);
         ReflectionTestUtils.setField(service, "codigoDispositivo", CODIGO_DISPOSITIVO);
         ReflectionTestUtils.setField(service, "maxSincronizacionesDiarias", MAX_SINCRONIZACIONES_DIARIAS);
     }
 
-    private GestoPagoToken tokenActivo() {
-        GestoPagoToken token = new GestoPagoToken();
-        token.setToken("token-de-prueba");
-        token.setTokenType("Bearer");
-        return token;
-    }
-
     @Test
     void sincronizarGuardaUnNuevoSnapshotCuandoLaRespuestaEsExitosa() {
         when(snapshotRepository.countByFechaSincronizacionBetween(any(), any())).thenReturn(0L);
-        when(tokenService.obtenerTokenActivo(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO))
-                .thenReturn(Optional.of(tokenActivo()));
+        when(authorizationHeaderProvider.obtenerHeader(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO))
+                .thenReturn("Bearer token-de-prueba");
 
         MensajeDto mensaje = new MensajeDto();
         mensaje.setCodigo("01");
@@ -111,14 +103,15 @@ class CatalogoServiceImplTest {
 
         assertThrows(LimiteDiarioSincronizacionException.class, () -> service.sincronizar());
 
-        verify(tokenService, never()).obtenerTokenActivo(any(), any());
+        verify(authorizationHeaderProvider, never()).obtenerHeader(any(), any());
         verify(snapshotRepository, never()).save(any());
     }
 
     @Test
     void sincronizarFallaSiNoHayTokenVigente() {
         when(snapshotRepository.countByFechaSincronizacionBetween(any(), any())).thenReturn(0L);
-        when(tokenService.obtenerTokenActivo(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO)).thenReturn(Optional.empty());
+        when(authorizationHeaderProvider.obtenerHeader(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO))
+                .thenThrow(new AutenticacionGestoPagoException("No hay un token vigente de GestoPago para distribuidor=" + ID_DISTRIBUIDOR));
 
         assertThrows(AutenticacionGestoPagoException.class, () -> service.sincronizar());
 
@@ -128,8 +121,8 @@ class CatalogoServiceImplTest {
     @Test
     void sincronizarFallaSiGestoPagoRespondeConCodigoDeError() {
         when(snapshotRepository.countByFechaSincronizacionBetween(any(), any())).thenReturn(0L);
-        when(tokenService.obtenerTokenActivo(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO))
-                .thenReturn(Optional.of(tokenActivo()));
+        when(authorizationHeaderProvider.obtenerHeader(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO))
+                .thenReturn("Bearer token-de-prueba");
 
         MensajeDto mensaje = new MensajeDto();
         mensaje.setCodigo("99");
@@ -148,8 +141,8 @@ class CatalogoServiceImplTest {
     @Test
     void sincronizarConvierteTimeoutDeFeignEnTimeoutGestoPagoException() {
         when(snapshotRepository.countByFechaSincronizacionBetween(any(), any())).thenReturn(0L);
-        when(tokenService.obtenerTokenActivo(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO))
-                .thenReturn(Optional.of(tokenActivo()));
+        when(authorizationHeaderProvider.obtenerHeader(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO))
+                .thenReturn("Bearer token-de-prueba");
         when(catalogoClient.obtenerCatalogo(anyString())).thenThrow(mock(RetryableException.class));
 
         assertThrows(TimeoutGestoPagoException.class, () -> service.sincronizar());
@@ -158,8 +151,8 @@ class CatalogoServiceImplTest {
     @Test
     void sincronizarConvierteErrorDeFeignEnComunicacionGestoPagoException() {
         when(snapshotRepository.countByFechaSincronizacionBetween(any(), any())).thenReturn(0L);
-        when(tokenService.obtenerTokenActivo(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO))
-                .thenReturn(Optional.of(tokenActivo()));
+        when(authorizationHeaderProvider.obtenerHeader(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO))
+                .thenReturn("Bearer token-de-prueba");
         when(catalogoClient.obtenerCatalogo(anyString())).thenThrow(mock(FeignException.class));
 
         assertThrows(com.proyecto.servicios.exception.ComunicacionGestoPagoException.class,

@@ -216,4 +216,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatus())
                 .body(GenericResponse.error(ex.getStatus().value(), ex.getMessage()));
     }
+
+    @ExceptionHandler(TransaccionException.class)
+    public ResponseEntity<GenericResponse<Void>> manejarTransaccionException(TransaccionException ex) {
+        log.error("Error en transacción GestoPago: {} - {}",
+                ex.getClass().getSimpleName(), ex.getMessage());
+        return ResponseEntity.status(ex.getStatus())
+                .body(GenericResponse.error(ex.getStatus().value(), ex.getMessage()));
+    }
 }

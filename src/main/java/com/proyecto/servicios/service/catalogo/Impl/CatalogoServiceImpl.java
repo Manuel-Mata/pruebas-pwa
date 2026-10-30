@@ -1,10 +1,8 @@
 package com.proyecto.servicios.service.catalogo.Impl;
 
 import com.proyecto.servicios.client.GestoPagoCatalogoClient;
-import com.proyecto.servicios.entity.gestopago.GestoPagoToken;
 import com.proyecto.servicios.entity.mongo.CatalogoSnapshot;
 import com.proyecto.servicios.entity.mongo.ProductoCatalogo;
-import com.proyecto.servicios.exception.AutenticacionGestoPagoException;
 import com.proyecto.servicios.exception.CatalogoNoEncontradoException;
 import com.proyecto.servicios.exception.ComunicacionGestoPagoException;
 import com.proyecto.servicios.exception.LimiteDiarioSincronizacionException;
@@ -15,7 +13,7 @@ import com.proyecto.servicios.model.catalogo.CatalogoSincronizacionResponse;
 import com.proyecto.servicios.model.catalogo.ProductoCatalogoResponse;
 import com.proyecto.servicios.model.gestopago.catalogo.CatalogoResponse;
 import com.proyecto.servicios.repositorys.mongo.CatalogoSnapshotRepository;
-import com.proyecto.servicios.service.GestoPagoTokenService;
+import com.proyecto.servicios.service.GestoPagoAuthorizationHeaderProvider;
 import com.proyecto.servicios.service.catalogo.CatalogoService;
 import feign.FeignException;
 import feign.RetryableException;
@@ -28,7 +26,6 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -39,7 +36,7 @@ public class CatalogoServiceImpl implements CatalogoService {
     private static final String CODIGO_EXITO = "01";
 
     private final GestoPagoCatalogoClient catalogoClient;
-    private final GestoPagoTokenService tokenService;
+    private final GestoPagoAuthorizationHeaderProvider authorizationHeaderProvider;
     private final CatalogoSnapshotRepository snapshotRepository;
     private final CatalogoMapper catalogoMapper;
 
@@ -57,7 +54,7 @@ public class CatalogoServiceImpl implements CatalogoService {
         log.info("Inicia sincronización del catálogo GestoPago (distribuidor={})", idDistribuidor);
 
         verificarLimiteDiario();
-        String authorization = construirAuthorizationHeader();
+        String authorization = authorizationHeaderProvider.obtenerHeader(idDistribuidor, codigoDispositivo);
 
         CatalogoResponse respuesta = consultarCatalogoRemoto(authorization);
 
@@ -115,17 +112,6 @@ public class CatalogoServiceImpl implements CatalogoService {
                     sincronizacionesHoy, maxSincronizacionesDiarias);
             throw new LimiteDiarioSincronizacionException(maxSincronizacionesDiarias);
         }
-    }
-
-    private String construirAuthorizationHeader() {
-        Optional<GestoPagoToken> token = tokenService.obtenerTokenActivo(idDistribuidor, codigoDispositivo);
-
-        GestoPagoToken activo = token.orElseThrow(() -> new AutenticacionGestoPagoException(
-                "No hay un token vigente de GestoPago para distribuidor=" + idDistribuidor
-                        + ". Aún no se ha ejecutado la renovación automática."));
-
-        String tipo = activo.getTokenType() != null ? activo.getTokenType() : "Bearer";
-        return tipo + " " + activo.getToken();
     }
 
     private CatalogoResponse consultarCatalogoRemoto(String authorization) {
