@@ -1,6 +1,7 @@
 package com.proyecto.servicios.mapper;
 
 import com.proyecto.servicios.entity.mongo.ProductoCatalogo;
+import com.proyecto.servicios.model.catalogo.ProductoCatalogoResponse;
 import com.proyecto.servicios.model.gestopago.catalogo.ProductoDto;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -15,6 +16,10 @@ public interface CatalogoMapper {
     ProductoCatalogo toProducto(ProductoDto dto);
 
     List<ProductoCatalogo> toProductos(List<ProductoDto> dtos);
+
+    ProductoCatalogoResponse toResponse(ProductoCatalogo producto);
+
+    List<ProductoCatalogoResponse> toResponses(List<ProductoCatalogo> productos);
 
     @Named("limpiarTexto")
     default String limpiarTexto(String texto) {
