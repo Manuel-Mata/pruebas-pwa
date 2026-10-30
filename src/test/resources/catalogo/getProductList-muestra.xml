@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<RESPONSE>
+    <MENSAJE>
+        <CODIGO>01</CODIGO>
+        <TEXTO>Operacion realizada con exito</TEXTO>
+    </MENSAJE>
+    <PRODUCTOS>
+        <producto servicio='ABIB' producto='ABIB 100' idServicio='2284' idProducto='14302' idCatTipoServicio='13' tipoFront='1' hasDigitoVerificador='false' precio='100.0' showAyuda='false' tipoReferencia='a'>
+            <legend><![CDATA[Conserva tu comprobante de pago.]]></legend>
+        </producto>
+        <producto servicio='Airalo' producto='hello africa 1GB 30D SS ' idServicio='3470' idProducto='20095' idCatTipoServicio='13' tipoFront='1' hasDigitoVerificador='false' precio='20.0' showAyuda='false' tipoReferencia='a'>
+            <legend><![CDATA[]]></legend>
+        </producto>
+        <producto servicio='Kaspersky Cloud Password Manager' producto='1 Usuario, 1 Ano' idServicio='3246' idProducto='19377' idCatTipoServicio='10' tipoFront='1' hasDigitoVerificador='false' precio='368.76' showAyuda='true' tipoReferencia='a'>
+            <legend><![CDATA[¡Gracias por tu compra!]]></legend>
+        </producto>
+    </PRODUCTOS>
+</RESPONSE>

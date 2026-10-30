@@ -208,4 +208,12 @@ public class GlobalExceptionHandler {
         }
         return null;
     }
+
+    @ExceptionHandler(CatalogoException.class)
+    public ResponseEntity<GenericResponse<Void>> manejarCatalogoException(CatalogoException ex) {
+        log.error("Error en integración de catálogo: {} - {}",
+                ex.getClass().getSimpleName(), ex.getMessage());
+        return ResponseEntity.status(ex.getStatus())
+                .body(GenericResponse.error(ex.getStatus().value(), ex.getMessage()));
+    }
 }
