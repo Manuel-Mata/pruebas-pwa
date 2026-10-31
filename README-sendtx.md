@@ -151,15 +151,12 @@ cada transacción en estado `EN_RECONCILIACION`:
 
 ## Logs
 
-Se registran advertencias y errores en cada escenario (timeout, error de comunicación, transacción
-fallida, agotamiento de reintentos de reconciliación) y el resultado final de cada transacción
-(éxito con el saldo resultante, o motivo de falla), sin incluir en ningún mensaje el payload cifrado,
-el `random`/`signed`, ni el token de autorización.
-
-**Pendiente:** a diferencia de `CatalogoServiceImpl` (que registra explícitamente "Inicia..."/"Termina..."
-por cada invocación), `TransaccionServiceImpl.procesar()` todavía no tiene un log de inicio explícito
-al comenzar a procesar una transacción — queda anotado para agregarlo y mantener el mismo estilo en
-todo el proyecto.
+`TransaccionServiceImpl.procesar()` registra explícitamente inicio y fin de cada invocación
+(`log.info`), igual que `CatalogoServiceImpl` en el Bloque 1, además de advertencias y errores en
+cada escenario (timeout, error de comunicación, transacción fallida, agotamiento de reintentos de
+reconciliación) y el resultado final de cada transacción (éxito con el saldo resultante, o motivo de
+falla). En ningún mensaje se incluye el payload cifrado, el `random`/`signed`, ni el token de
+autorización.
 
 ## Configuración
 
@@ -194,13 +191,42 @@ usa el resto del proyecto, y viven únicamente en `application-local.properties`
   intento fallido cuando `confirmTx.do` no responde, marca fallida directamente al agotar los
   intentos máximos.
 
+## Prueba en vivo (30/oct/2026)
+
+Se probó `POST /transacciones` end-to-end contra el servidor real de GestoPago
+(`https://gestopago.portalventas.net`), con una cuenta real (saldo `$5000.50`) y un producto real del
+catálogo sincronizado (ABIB 50, `idServicio=2284`, `idProducto=14293`, `tipoFront=1`). Resultado:
+`200 OK`, `estado: EXITOSA`, `idTxGestoPago`/`numAutorizacion` devueltos por GestoPago, y el saldo de
+la cuenta bajó correctamente a `$4950.50`. También se verificó en el camino:
+- El job de reconciliación se activa correctamente ante un timeout real (se probó sin querer, antes
+  de configurar bien la URL del servidor — la transacción quedó `EN_RECONCILIACION` como se esperaba).
+- La prevención de duplicados funciona: reenviar el mismo `idempotencyKey` devuelve `409 Conflict`
+  (`TransaccionDuplicadaException`) sin volver a llamar a GestoPago.
+
+Esta prueba también sacó a la luz dos bugs reales, ya corregidos:
+
+**1. `Transaccion`/`TransaccionRepository` nunca se registraron en la configuración de JPA.**
+`ConfigDB.java` define manualmente (por el datasource dual del proyecto) qué paquetes escanea
+`@EnableJpaRepositories` y `setPackagesToScan(...)`; el paquete `repositorys.transacciones` /
+`entity.transacciones` se quedó fuera al construirlos, y como las pruebas unitarias usan Mockito (no
+levantan Spring), nadie lo detectó hasta arrancar la aplicación real
+(`NoSuchBeanDefinitionException: TransaccionRepository`). Corregido agregando ambos paquetes a
+`ConfigDB`.
+
+**2. `SendTxResponse.saldoF`/`comisionF` mapeados como `BigDecimal` en vez de `String`.**
+La respuesta real de `sendTx.do` incluye campos "formateados para mostrar" (`SALDO_F`, `COMISION_F`)
+que pueden traer coma de miles, por ejemplo `"19,259.77"` — un valor que `BigDecimal` no puede
+parsear directamente, lo que rompía la deserialización de **toda** la respuesta (incluida una
+transacción exitosa) y la reportaba como error 503 de comunicación, aunque GestoPago ya la hubiera
+aplicado correctamente. Corregido cambiando esos dos campos a `String` (los campos sin `_F`, que sí
+son `BigDecimal`, son los que se usan para cualquier cálculo).
+
 ## Pendiente
 
-- Agregar el log explícito de "inicio de invocación" en `TransaccionServiceImpl.procesar()`, para
-  mantener el mismo estilo de logging que `CatalogoServiceImpl` (Bloque 1).
-- **Prueba en vivo** contra el servidor real de GestoPago (requiere una `Cuenta` ya existente en la
-  base de datos, creada por el flujo de onboarding).
 - Confirmar con más casos de prueba el supuesto de que `tipoFront == 1` es el único valor que usa
-  `telefono` en vez de `referencia`+`montoPago`.
-- Confirmar el origen/significado real del campo `unidad` (actualmente un valor fijo configurado,
-  sin una regla de negocio documentada para derivarlo).
+  `telefono` en vez de `referencia`+`montoPago` (la prueba en vivo solo cubrió `tipoFront == 1`).
+- Confirmar el origen/significado real del campo `unidad` (funcionó con el valor configurado, pero
+  sigue sin una regla de negocio documentada para derivarlo en vez de ser un valor fijo).
+- Probar en vivo el flujo de reconciliación real con `confirmTx.do` después de un timeout genuino
+  (hasta ahora solo se confirmó que el job se activa correctamente, no su resultado final contra
+  GestoPago).

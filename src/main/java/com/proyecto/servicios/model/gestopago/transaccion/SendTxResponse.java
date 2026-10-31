@@ -30,11 +30,14 @@ public class SendTxResponse {
     @JacksonXmlProperty(localName = "COMISION")
     private BigDecimal comision;
 
+    // Campos "_F": version formateada para mostrar (puede traer coma de miles,
+    // ej. "19,259.77"), por eso son String y no BigDecimal -- SALDO y COMISION
+    // (sin "_F") son los que se usan para cualquier calculo.
     @JacksonXmlProperty(localName = "SALDO_F")
-    private BigDecimal saldoF;
+    private String saldoF;
 
     @JacksonXmlProperty(localName = "COMISION_F")
-    private BigDecimal comisionF;
+    private String comisionF;
 
     @JacksonXmlProperty(localName = "FECHA")
     private String fecha;
