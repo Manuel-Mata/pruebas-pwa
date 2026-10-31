@@ -113,6 +113,7 @@ mismo tipo de falla de integración ya resuelta ahí.
 |---|---|---|---|
 | `TransaccionDuplicadaException` | `TransaccionException` | Ya existe una transacción con ese `upc` | 409 |
 | `CuentaNoEncontradaException` | `OnboardingException` (reutilizada) | `cuentaId` no existe | 404 |
+| `OperacionNoAutorizadaException` | `TransaccionException` | La cuenta no pertenece al cliente autenticado (correo del JWT) | 403 |
 | `CuentaInactivaException` | `TransaccionException` | La cuenta no está `ACTIVA` | 403 |
 | `SaldoInsuficienteException` | `TransaccionException` | El saldo es menor al monto del producto | 402 |
 | `EncriptacionGestoPagoException` | `TransaccionException` | Falla al cifrar/serializar el payload | 500 |
@@ -133,6 +134,11 @@ y `OnboardingException` (respuesta `GenericResponse<Void>` genérica, sin expone
   `confirmTx.do`. Nunca se descuenta por adelantado.
 - El descuento de saldo usa el mismo lock pesimista (`buscarConLockParaActualizar`) que la validación
   inicial, para que dos confirmaciones concurrentes no puedan descontar el mismo saldo dos veces.
+- Antes de cualquier otra validación, se verifica que la cuenta pertenezca al cliente autenticado:
+  se resuelve el `Usuario` a partir del correo del JWT (`Authentication.getName()`, inyectado en el
+  controller) y se compara su `cliente.id` contra el `cliente.id` de la cuenta solicitada. Nunca se
+  confía en un `clienteId` que pudiera mandar el propio request — no existe ese campo. Un mismatch
+  lanza `OperacionNoAutorizadaException` (403) antes de tocar el estatus o el saldo de la cuenta.
 
 ## Reconciliación por timeout
 
@@ -175,12 +181,12 @@ usa el resto del proyecto, y viven únicamente en `application-local.properties`
 
 ## Pruebas
 
-21 pruebas unitarias con Mockito, sin tocar red ni base de datos real, distribuidas en 3 clases:
+23 pruebas unitarias con Mockito, sin tocar red ni base de datos real, distribuidas en 3 clases:
 
-- **`TransaccionPersistenciaServiceImplTest`** (9): registro de intento válido, `upc` duplicado,
-  cuenta inexistente, cuenta inactiva, saldo insuficiente, confirmación exitosa descuenta saldo,
-  marcar fallida no toca el saldo, marcar en reconciliación incrementa intentos, confirmación exitosa
-  por reconciliación descuenta saldo.
+- **`TransaccionPersistenciaServiceImplTest`** (11): registro de intento válido, `upc` duplicado,
+  cuenta inexistente, **cuenta de otro cliente (403)**, **usuario autenticado no existe (403)**, cuenta
+  inactiva, saldo insuficiente, confirmación exitosa descuenta saldo, marcar fallida no toca el saldo,
+  marcar en reconciliación incrementa intentos, confirmación exitosa por reconciliación descuenta saldo.
 - **`TransaccionServiceImplTest`** (7): producto inexistente en catálogo, armado de payload con
   `telefono` (`tipoFront == 1`), armado de payload con `referencia`+`montoPago` (otro `tipoFront`),
   confirmación exitosa cuando GestoPago responde código `01`, marcar fallida cuando no responde `01`,
@@ -220,6 +226,18 @@ parsear directamente, lo que rompía la deserialización de **toda** la respuest
 transacción exitosa) y la reportaba como error 503 de comunicación, aunque GestoPago ya la hubiera
 aplicado correctamente. Corregido cambiando esos dos campos a `String` (los campos sin `_F`, que sí
 son `BigDecimal`, son los que se usan para cualquier cálculo).
+
+### Actualización (30/oct/2026, tarde): validación de autorización por cliente
+
+Al revisar la actividad completa del profesor se detectó que `POST /transacciones` nunca verificaba
+que la cuenta solicitada perteneciera al cliente autenticado: cualquier usuario con sesión válida
+podía cobrar sobre **cualquier** cuenta existente con saldo, con solo conocer su `cuentaId`. Se agregó
+la validación descrita en "Idempotencia y manejo de saldo" (`OperacionNoAutorizadaException`, 403) y se
+volvió a probar en vivo:
+- `POST /transacciones` con el token de `ana.roma@test.com` (cliente dueño de la cuenta 4) contra la
+  cuenta 1 (de otro cliente) → `403 Forbidden`, "No tiene autorización para operar sobre esta cuenta.",
+  sin llegar a tocar el saldo ni a llamar a GestoPago.
+- El mismo request contra su propia cuenta (4) → `200 OK`, `estado: EXITOSA`, igual que antes del fix.
 
 ## Pendiente
 

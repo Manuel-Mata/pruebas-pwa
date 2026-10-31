@@ -61,6 +61,7 @@ class TransaccionServiceImplTest {
     private static final Integer ID_DISTRIBUIDOR = 83;
     private static final String CODIGO_DISPOSITIVO = "GPS83-TPV-17";
     private static final Long CUENTA_ID = 10L;
+    private static final String CORREO_AUTENTICADO = "ana.roma@test.com";
 
     @BeforeEach
     void setUp() {
@@ -105,16 +106,16 @@ class TransaccionServiceImplTest {
     void procesarFallaSiElProductoNoExisteEnElCatalogo() {
         when(catalogoSnapshotRepository.findFirstByOrderByFechaSincronizacionDesc()).thenReturn(Optional.empty());
 
-        assertThrows(CatalogoNoEncontradoException.class, () -> service.procesar(request()));
+        assertThrows(CatalogoNoEncontradoException.class, () -> service.procesar(request(), CORREO_AUTENTICADO));
 
-        verify(persistenciaService, never()).registrarIntento(any(), any(), any(), any(), any(), any(), any());
+        verify(persistenciaService, never()).registrarIntento(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
     void procesarArmaPayloadConTelefonoCuandoTipoFrontEsUno() {
         mockearCatalogoConProducto(1);
         when(encryptionService.encriptar(anyString())).thenReturn("signed-payload");
-        when(persistenciaService.registrarIntento(any(), any(), any(), any(), any(), any(), any()))
+        when(persistenciaService.registrarIntento(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(transaccionPendiente());
 
         MensajeDto mensaje = new MensajeDto();
@@ -126,7 +127,7 @@ class TransaccionServiceImplTest {
         when(authorizationHeaderProvider.obtenerHeader(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO)).thenReturn("Bearer token");
         when(persistenciaService.confirmarExitosa(eq(1L), any())).thenReturn(transaccionPendiente());
 
-        service.procesar(request());
+        service.procesar(request(), CORREO_AUTENTICADO);
 
         ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
         verify(encryptionService).encriptar(payloadCaptor.capture());
@@ -137,7 +138,7 @@ class TransaccionServiceImplTest {
     void procesarArmaPayloadConReferenciaYMontoPagoCuandoTipoFrontNoEsUno() {
         mockearCatalogoConProducto(2);
         when(encryptionService.encriptar(anyString())).thenReturn("signed-payload");
-        when(persistenciaService.registrarIntento(any(), any(), any(), any(), any(), any(), any()))
+        when(persistenciaService.registrarIntento(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(transaccionPendiente());
 
         MensajeDto mensaje = new MensajeDto();
@@ -149,7 +150,7 @@ class TransaccionServiceImplTest {
         when(authorizationHeaderProvider.obtenerHeader(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO)).thenReturn("Bearer token");
         when(persistenciaService.confirmarExitosa(eq(1L), any())).thenReturn(transaccionPendiente());
 
-        service.procesar(request());
+        service.procesar(request(), CORREO_AUTENTICADO);
 
         ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
         verify(encryptionService).encriptar(payloadCaptor.capture());
@@ -162,7 +163,7 @@ class TransaccionServiceImplTest {
     void procesarConfirmaExitosaCuandoGestoPagoResponde01() {
         mockearCatalogoConProducto(1);
         when(encryptionService.encriptar(anyString())).thenReturn("signed-payload");
-        when(persistenciaService.registrarIntento(any(), any(), any(), any(), any(), any(), any()))
+        when(persistenciaService.registrarIntento(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(transaccionPendiente());
 
         MensajeDto mensaje = new MensajeDto();
@@ -176,7 +177,7 @@ class TransaccionServiceImplTest {
         Transaccion exitosa = Transaccion.builder().id(1L).upc("upc-1").estado(EstadoTransaccion.EXITOSA).build();
         when(persistenciaService.confirmarExitosa(1L, respuesta)).thenReturn(exitosa);
 
-        TransaccionResponse resultado = service.procesar(request());
+        TransaccionResponse resultado = service.procesar(request(), CORREO_AUTENTICADO);
 
         assertEquals(EstadoTransaccion.EXITOSA, resultado.getEstado());
         verify(persistenciaService, never()).marcarFallida(any(), any(), any());
@@ -186,7 +187,7 @@ class TransaccionServiceImplTest {
     void procesarMarcaFallidaCuandoGestoPagoNoResponde01() {
         mockearCatalogoConProducto(1);
         when(encryptionService.encriptar(anyString())).thenReturn("signed-payload");
-        when(persistenciaService.registrarIntento(any(), any(), any(), any(), any(), any(), any()))
+        when(persistenciaService.registrarIntento(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(transaccionPendiente());
 
         MensajeDto mensaje = new MensajeDto();
@@ -201,7 +202,7 @@ class TransaccionServiceImplTest {
         Transaccion fallida = Transaccion.builder().id(1L).upc("upc-1").estado(EstadoTransaccion.FALLIDA).build();
         when(persistenciaService.marcarFallida(1L, respuesta, null)).thenReturn(fallida);
 
-        TransaccionResponse resultado = service.procesar(request());
+        TransaccionResponse resultado = service.procesar(request(), CORREO_AUTENTICADO);
 
         assertEquals(EstadoTransaccion.FALLIDA, resultado.getEstado());
         verify(persistenciaService, never()).confirmarExitosa(any(), any());
@@ -211,13 +212,13 @@ class TransaccionServiceImplTest {
     void procesarMarcaEnReconciliacionYLanzaTimeoutSiHayRetryableException() {
         mockearCatalogoConProducto(1);
         when(encryptionService.encriptar(anyString())).thenReturn("signed-payload");
-        when(persistenciaService.registrarIntento(any(), any(), any(), any(), any(), any(), any()))
+        when(persistenciaService.registrarIntento(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(transaccionPendiente());
         when(authorizationHeaderProvider.obtenerHeader(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO)).thenReturn("Bearer token");
         when(transaccionClient.enviarTransaccion(anyString(), anyString(), anyString()))
                 .thenThrow(mock(RetryableException.class));
 
-        assertThrows(TimeoutGestoPagoException.class, () -> service.procesar(request()));
+        assertThrows(TimeoutGestoPagoException.class, () -> service.procesar(request(), CORREO_AUTENTICADO));
 
         verify(persistenciaService).marcarEnReconciliacion(1L);
     }
@@ -226,13 +227,13 @@ class TransaccionServiceImplTest {
     void procesarMarcaFallidaYLanzaComunicacionSiHayFeignException() {
         mockearCatalogoConProducto(1);
         when(encryptionService.encriptar(anyString())).thenReturn("signed-payload");
-        when(persistenciaService.registrarIntento(any(), any(), any(), any(), any(), any(), any()))
+        when(persistenciaService.registrarIntento(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(transaccionPendiente());
         when(authorizationHeaderProvider.obtenerHeader(ID_DISTRIBUIDOR, CODIGO_DISPOSITIVO)).thenReturn("Bearer token");
         when(transaccionClient.enviarTransaccion(anyString(), anyString(), anyString()))
                 .thenThrow(mock(FeignException.class));
 
-        assertThrows(ComunicacionGestoPagoException.class, () -> service.procesar(request()));
+        assertThrows(ComunicacionGestoPagoException.class, () -> service.procesar(request(), CORREO_AUTENTICADO));
 
         verify(persistenciaService).marcarFallida(eq(1L), eq(null), anyString());
     }

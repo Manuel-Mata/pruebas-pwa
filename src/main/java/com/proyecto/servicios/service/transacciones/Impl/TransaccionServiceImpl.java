@@ -60,7 +60,7 @@ public class TransaccionServiceImpl implements TransaccionService {
     private String unidad;
 
     @Override
-    public TransaccionResponse procesar(TransaccionSolicitudRequest request) {
+    public TransaccionResponse procesar(TransaccionSolicitudRequest request, String correoAutenticado) {
         log.info("Inicia procesamiento de transacción (cuentaId={}, idServicio={}, idProducto={}, upc={})",
                 request.getCuentaId(), request.getIdServicio(), request.getIdProducto(), request.getIdempotencyKey());
 
@@ -77,7 +77,8 @@ public class TransaccionServiceImpl implements TransaccionService {
         // mientras se espera la red).
         Transaccion transaccion = persistenciaService.registrarIntento(
                 request.getCuentaId(), request.getIdServicio(), request.getIdProducto(),
-                request.getReferenciaPago(), producto.getPrecio(), request.getIdempotencyKey(), payloadJson);
+                request.getReferenciaPago(), producto.getPrecio(), request.getIdempotencyKey(), payloadJson,
+                correoAutenticado);
 
         String signed = encryptionService.encriptar(payloadJson);
         String random = UUID.randomUUID().toString();

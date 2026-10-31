@@ -15,12 +15,14 @@ import java.math.BigDecimal;
 public interface TransaccionPersistenciaService {
 
     /**
-     * Valida cuenta (existe, activa, con saldo) y que el upc no esté usado,
-     * y guarda la transacción en estado PENDIENTE. Lockea la cuenta brevemente
-     * mientras hace estas validaciones para evitar condiciones de carrera.
+     * Valida cuenta (existe, pertenece al cliente autenticado, activa, con saldo)
+     * y que el upc no esté usado, y guarda la transacción en estado PENDIENTE.
+     * Lockea la cuenta brevemente mientras hace estas validaciones para evitar
+     * condiciones de carrera.
      */
     Transaccion registrarIntento(Long cuentaId, Integer idServicio, Integer idProducto,
-                                  String referenciaPago, BigDecimal monto, String upc, String payloadOriginal);
+                                  String referenciaPago, BigDecimal monto, String upc, String payloadOriginal,
+                                  String correoAutenticado);
 
     /** Marca la transacción como exitosa con los datos de la respuesta y debita el saldo de la cuenta. */
     Transaccion confirmarExitosa(Long transaccionId, SendTxResponse respuesta);

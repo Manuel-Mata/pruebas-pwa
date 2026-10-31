@@ -1,16 +1,19 @@
 package com.proyecto.servicios.service.transacciones.Impl;
 
 import com.proyecto.servicios.entity.clientes.Cuenta;
+import com.proyecto.servicios.entity.clientes.Usuario;
 import com.proyecto.servicios.entity.transacciones.Transaccion;
 import com.proyecto.servicios.enums.EstadoTransaccion;
 import com.proyecto.servicios.enums.EstatusCuenta;
 import com.proyecto.servicios.exception.CuentaInactivaException;
+import com.proyecto.servicios.exception.OperacionNoAutorizadaException;
 import com.proyecto.servicios.exception.SaldoInsuficienteException;
 import com.proyecto.servicios.exception.TransaccionDuplicadaException;
 import com.proyecto.servicios.exception.onboarding.CuentaNoEncontradaException;
 import com.proyecto.servicios.model.gestopago.transaccion.ConfirmTxResponse;
 import com.proyecto.servicios.model.gestopago.transaccion.SendTxResponse;
 import com.proyecto.servicios.repositorys.clientes.CuentaRepository;
+import com.proyecto.servicios.repositorys.clientes.UsuarioRepository;
 import com.proyecto.servicios.repositorys.transacciones.TransaccionRepository;
 import com.proyecto.servicios.service.transacciones.TransaccionPersistenciaService;
 import lombok.RequiredArgsConstructor;
@@ -28,11 +31,13 @@ public class TransaccionPersistenciaServiceImpl implements TransaccionPersistenc
 
     private final CuentaRepository cuentaRepository;
     private final TransaccionRepository transaccionRepository;
+    private final UsuarioRepository usuarioRepository;
 
     @Override
     @Transactional
     public Transaccion registrarIntento(Long cuentaId, Integer idServicio, Integer idProducto,
-                                         String referenciaPago, BigDecimal monto, String upc, String payloadOriginal) {
+                                         String referenciaPago, BigDecimal monto, String upc, String payloadOriginal,
+                                         String correoAutenticado) {
 
         if (transaccionRepository.findByUpc(upc).isPresent()) {
             throw new TransaccionDuplicadaException(upc);
@@ -40,6 +45,15 @@ public class TransaccionPersistenciaServiceImpl implements TransaccionPersistenc
 
         Cuenta cuenta = cuentaRepository.buscarConLockParaActualizar(cuentaId)
                 .orElseThrow(CuentaNoEncontradaException::new);
+
+        // La cuenta debe pertenecer al cliente autenticado (nunca se confía en un
+        // clienteId que pudiera venir del propio request): se valida contra el
+        // correo del JWT, resuelto aquí mismo al usuario y su cliente.
+        Usuario usuarioAutenticado = usuarioRepository.findByCorreo(correoAutenticado)
+                .orElseThrow(OperacionNoAutorizadaException::new);
+        if (!cuenta.getCliente().getId().equals(usuarioAutenticado.getCliente().getId())) {
+            throw new OperacionNoAutorizadaException();
+        }
 
         if (cuenta.getEstatus() != EstatusCuenta.ACTIVA) {
             throw new CuentaInactivaException();
